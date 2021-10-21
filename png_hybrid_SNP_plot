@@ -1,0 +1,309 @@
+#!/usr/bin/perl
+
+use GD;
+
+if (@ARGV < 3) {
+	print "1.= hybrid_plot generated with NGS_SNPs_from_vcf_test_recent_hybrids\n";
+	print "2.= list with chromosome sizes\n";
+	print "3.= y distance between isolates in pixels (e.g. 20)\n";
+	print "4.= query for hybrid population to display (e.g. JPN)\n";
+	print "4.= empty displays all populations\n";
+	exit;
+	}
+
+
+$var      = $ARGV[1];
+$iso_dist = $ARGV[2];
+$query    = $ARGV[3];
+
+
+
+# get chromosome sizes ++++++++++++++++++++++++++++++++++++++++++++++
+$chr_file = $ARGV[1];
+$count_chr =0;
+@chr_name = ();
+$len_max = 0;
+
+# extract chromosome sizes into hash
+open(CHR,"$chr_file");
+while(<CHR>) {
+        ($ch,$len) = /^\S+chr(\S+)\s+(\S+)/;
+        if ($len) {
+               $chr_len{$ch} = $len;
+	       # get length of largest chromosome for display zoom
+	       if ($len > $len_max) {
+		      	$len_max = $len;
+	      		} 
+               push(@chr_name,$ch);
+               print "$ch\t$len\n";
+               $count_chr++;
+               }
+        }
+close(CHR);
+
+
+
+
+# collect names of isolates +++++++++++++++++++++++++++++++
+@iso_name = ();
+@iso_name0 = ();
+
+open (IN, "<$ARGV[0]");
+VCF:while (<IN>){
+        ($dat) = /^chr\s+\S+\s+\S+\s+\S+\s+(\S.+)/;
+        if ($dat) {
+                $dat =~ s/\s+/ /g;
+                @iso_name0 = split(' ',$dat);
+                last VCF;
+                }
+        }
+close(IN);
+
+# print isolate names and make list of islotaes to keep  
+$count_iso =0;
+for($i=0;$i<@iso_name0;$i++) {
+	$rem = "no show";
+	if ($iso_name0[$i] =~ /$query/) {
+		$rem = "display";
+		$iso_name[$count_iso] = $iso_name0[$i];
+		$count_iso++;
+		}
+	print "$i\t$iso_name0[$i]\t$rem\n";
+	}
+
+print "largest chromosome: $len_max\n";
+print "display $count_iso isolates\n";
+
+$chr_dist = ($count_iso+1) * $iso_dist;
+
+
+
+
+# parse hybrid plot file and suck data into 2D array ++++++++++++++++++++
+$count =0;
+$first = 1;
+
+open(IN,"$ARGV[0]");
+while (<IN>){
+
+        ($ch,$pos,$ref,$var,$data) = /^\S+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/;
+        if ($data) {
+                @data = split('',$data);
+		
+		# collect data only for the selected isolates
+		$data = '';
+		for($i=0;$i<@iso_name0;$i++) {
+			if ($iso_name0[$i] =~ /$query/) {
+				$data .= "$data[$i]";
+				}
+			}
+
+		#print "$pos\t$data\n";
+
+        	$all[$count][0] = $ch;
+		$all[$count][1] = $pos;
+        	$all[$count][2] = $ref;
+        	$all[$count][3] = $var;
+		$all[$count][4] = $data;
+        	$count++;
+                }
+        }
+close(IN);
+
+
+print "total entries; $count\n";
+
+
+
+
+
+# calc basics for images ++++++++++++++++++++++++++++++++++ 
+$x_lim = 1500;
+$x_zoom = $x_lim/$len_max;
+$scale_bar = 1000;
+
+# calculate size of image
+$x_base = 200;
+$y_base = 30;
+
+# approx x-size
+$wide = $x_lim+$x_base+50;
+$high = 2*$y_base+$count_chr*$chr_dist;
+
+
+print "zoom = $x_zoom\tdimensions $wide x $high\n";
+
+# call image routine
+&mk_image;
+
+
+
+
+# make png output ++++++++++++++++++++++++++++++++
+$out = "SNP_plot_$ARGV[0].png";
+open $png, '>', $out or die;
+binmode $png;
+print $png $img->png;
+
+# open image
+print "opening image, please wait\n";
+print "wrote $out\n";
+`eog $out`;
+
+
+
+
+# ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# make image +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+sub mk_image {
+
+
+$img = new GD::Image($wide,$high);
+
+# allocate some colors
+$white = $img->colorAllocate(255,255,255);
+$black = $img->colorAllocate(0,0,0);
+$red = $img->colorAllocate(255,0,0);
+$blue = $img->colorAllocate(0,0,255);
+$gray = $img->colorAllocate(150,150,150);
+$magenta = $img->colorAllocate(255,0,100);
+$magenta = $img->colorAllocate(0,255,0);
+
+
+# set line thickness
+$img->setThickness($thick);
+
+
+# make label
+$x1 = $x_base;
+$y1 = $y_base-20;
+$lab = "Hybrid population $query";
+$img->string(gdLargeFont,$x1,$y1,$lab,$black);
+
+$fill = $red;
+$x1 = $x_base +300;
+$lab = "Parent 1";
+$img->string(gdLargeFont,$x1,$y1,$lab,$fill);
+
+$fill = $blue;
+$x1 = $x_base +500;
+$lab = "Parent 2";
+$img->string(gdLargeFont,$x1,$y1,$lab,$fill);
+
+
+
+# make empty chromosome boxes for all chromsomes and and isolates
+# loop over chromosomes
+for($i=0;$i<@chr_name;$i++) {
+	$chr = $chr_name[$i];
+	$len = $chr_len{$chr};
+
+	$x1 = $x_base;
+	$x2 = $x_base + int($len*$x_zoom);
+
+	# chromosome label
+	$x = 30;
+	$y1 = $y_base + ($chr-1)*$chr_dist;
+	$lab = "chr$chr";
+        $img->string(gdLargeFont,$x-20,$y1,$lab,$black);
+
+	# loop over isolates
+	for ($j=0;$j<@iso_name;$j++) {
+		$y1 = $y_base + ($chr-1)*$chr_dist +$iso_dist*$j;
+		$y2 = $y1+$iso_dist-3;
+		$fill = $black;
+        	$img->rectangle($x1,$y1,$x2,$y2,$fill);
+		# isolate label
+		$x = 80;
+		$lab = $iso_name[$j];
+		$img->string(gdLargeFont,$x-20,$y1,$lab,$black);
+
+		}
+
+	print "$chr\t$len\tzoom --> \tx2 = $x2\n";
+
+
+	}
+
+
+# draw scale
+$scale_unit = 1000;
+$unit_bp = $scale_unit*1000; 
+
+for($i=0;$i<=$len_max;$i+=$unit_bp) {
+	$val = $i/1000000;
+	$x1 = $x_base+int($i*$x_zoom);
+        $y1 = $y_base + $count_chr*$chr_dist;
+        $y2 = $y1+4;
+        $img->line($x1,$y1,$x1,$y2,$black);
+        $img->string(gdLargeFont,$x1,$y2+3,$val,$black);
+
+	print "scale $i\t$val\t$x1\n";
+
+	}
+
+
+# display SNP ++++++++++++++++++++++++++++++++++++
+
+for($i=0;$i<$count;$i++) {
+
+	$chr = $all[$i][0];
+        $pos = $all[$i][1];
+        $ref = $all[$i][2];
+	$var = $all[$i][3];
+	$data = $all[$i][4];
+
+	#print "$chr\t$pos\t$data\n";
+
+	$x1 = $x_base + int($pos*$x_zoom);
+
+	@data = split('',$data);
+
+	for($j=0;$j<@data;$j++) {
+		if ($data[$j] ==1) { $fill = $blue; }
+		if ($data[$j] ==2) { $fill = $red; }
+		if ($data[$j] ==3) { $fill = $magenta; }
+		if ($data[$j] ==4) { $fill = $green; }
+
+		$y1 = $y_base + ($chr-1)*$chr_dist + $iso_dist*$j+1;
+		$y2 = $y1+$iso_dist-5;
+		$img->line($x1,$y1,$x1,$y2,$fill);
+		}
+
+
+        }
+
+close(IN);
+
+
+} # end make image +++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

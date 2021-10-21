@@ -1,0 +1,514 @@
+#!/usr/bin/perl
+
+#use lib '/home/wicker/data/WICKERsoft/';
+#use Biomodule;
+
+if (@ARGV < 6) {
+	print "1. = .vcf file where refence corresponds to ancestor\n";
+	print "2. = list of selcted isolates for parents and hybrid with population identifiers\n";
+	print "3. = parent1_parent2_hybrid prefixes (e.g. USA_CHN_JPN have to match the identifiers in 2.)\n";
+	print "4. = minimum info space for parents (e.g. 1)\n";
+	print "5. = minimum frequency in parent 1 (e.g. 0.9)\n";
+	print "6. = minimum frequency in parent 2 (e.g. 0.9)\n";
+	exit;
+	}
+
+$min_info = $ARGV[3];
+$min_par1 = $ARGV[4];
+$min_par2 = $ARGV[5];
+
+$lab1 = $min_par1*100;
+$lab2 = $min_par2*100;
+
+$long = '';
+if ($ARGV[6] =~ /[vp]/) {
+	$long = $ARGV[0];
+	}
+
+$out = "ISR";
+$out = "DIC";
+
+# get names of parental populations 
+($par1,$par2,$hyb) = ($ARGV[2] =~ /^([^_]+)_([^_]+)_([^_]+)/);
+($chr) = ($ARGV[0] =~ /(Bgt_chr-\d+)/);
+
+print "pop = $par1,$par2,$hyb\t$ARGV[2]\n\n";
+
+$log1 = "hybrid_plot_$min_par1\_$min_par2\_$chr\_$ARGV[2]";
+if ($ARGV[6] eq 'c') {
+	$log1 = "hybrid_plot_control_$min_par1\_$min_par2\_$chr\_$ARGV[2]";
+	}
+open(LOG1,">$log1");
+
+
+
+$tot=0;
+@all = ();
+$first =1;
+
+# get cluster classifications from list, assign prefixes
+%ID = ();
+$iso_collect = '';
+open(IN,"$ARGV[1]");
+while (<IN>) {
+	($id,$pref) = /^([^#]\S+)\s+(\S+)/;
+	if ($id) {
+		($num) = ($id =~ /^[^_]+_(\S+)/);
+
+		
+
+		$iso_collect .= " $id ";
+		$id2 = "$pref\_$num";
+
+		$ID{$id} = $id2;
+		push(@iso,$id);
+		push(@iso2,$id2);
+		print "$id\t==>\t$ID{$id}\n";
+		}
+	}
+close(IN);
+
+$count_renamed = @iso2;
+print "renamed: $count_renamed\n";
+
+
+# extract header line assign prefixes
+# loop thru vcf file +++++++++++++++++++++++++++++
+print "\nextract header line assign prefixes, keep names in order \n";
+@iso = ();
+@hyb = ();
+@par1 = ();
+@par2 = ();
+@out =();
+
+$count_all =0;
+open(IN,"$ARGV[0]");
+VCF: while (<IN>) {
+
+	($dat) = /^\#(CHROM\s.+)$/;
+        if ($dat) {
+		
+		$dat =~ s/\s+/ /g;
+		(@data) = split(' ',$dat);
+		@field = @data;
+
+		$count_all =0;
+
+		# make list of selected names
+		for($i=9;$i<@data;$i++) {
+			
+			$count_all++;
+
+			$id = $data[$i];
+
+				# rename isolates to fit groups
+				$field[$i] = $ID{$id};
+				$id2 = $ID{$id};
+
+				#print "rename\t$id\t$id2\n";
+
+				$list_yes =0;
+
+				# assign groups of isolates
+                		if ($id2 =~ /$hyb\_/) { 
+					$count_hyb++;
+					push(@hyb,$id2);
+					push(@iso,$id2);
+					$list_yes++;
+					} 
+                		if ($id2 =~ /$par1\_/) { 
+					$count_par1++;
+					push(@par1,$id2);
+					push(@iso,$id2);
+					$list_yes++; 
+					}
+                		if ($id2 =~ /$par2\_/) { 
+					$count_par2++; 
+					push(@par2,$id2);
+					push(@iso,$id2);
+					$list_yes++;
+					}
+                                if ($id2 =~ /^$out/) {
+                                        $count_out++;
+                                        push(@out,$id2);
+					push(@iso,$id2);
+					$list_yes++;
+                                        }
+
+
+				# collectleftovers not in list
+				if ($list_yes ==0) {
+					push(@rest,$id2);
+					#print "REST:\t$id2\n";
+					$c ++;
+					}
+			}
+		last VCF;
+		}
+
+	}
+
+$count_iso = @iso;
+$count_rest = $count_all-$count_par1-$count_par2-$count_hyb;
+
+print "total siolates:    $count_all\n";
+print "selected isolates: $count_iso\n";
+print "par1      $par1\t$count_par1\t@par1\n";
+print "par2      $par2\t$count_par2\t@par2\n";
+print "hyb       $hyb\t$count_hyb\t@hyb\n";
+print "out       $out\t$count_out\t@out\n";
+print "rest      $count_rest\t@rest\n";
+
+print LOG1 "chr\tpos\tref\tvar\t@hyb @par1 @par2 @out\n";
+
+$line =  "chr\tpos\tref\tvar";
+for($i=0;$i<@iso;$i++) {
+	$line .= "\t$iso[$i]";
+	}
+print LOG2 "$line\n";
+
+
+# collect only listed isolates with variant positions in new vcf and 2D array
+$first = 1;
+$count =0;
+open(IN,"$ARGV[0]");
+VCF: while (<IN>) {
+
+        $line = $_;
+
+	if ($count_good > 20) {
+#		exit;
+		}
+
+        ($dat) = /^(\S.+)$/;
+        if (($dat) && ($first ==0)) {
+
+                $dat =~ s/\s+/ /g;
+                (@data) = split(' ',$dat);
+
+                $chr = $data[0];
+                $pos = $data[1];
+                $ref = $data[3];
+                $var = $data[4];
+
+		if ($pos > 5000000) {
+			#exit;
+			}
+
+                $lref = length($ref);
+                $lvar = length($var);
+
+		# only process 1 bp SNPs +++++++++++++++++++++++++++++
+		if (($lref ==1) && ($lvar ==1)) {
+
+			# make temp array for values and names of listed isolates
+			@keep = ();
+			@keep_par1 =();
+			@keep_par2 =();
+			@keep_rest = ();
+			@keep_out = ();
+			@keep_name = ();
+
+			$count_all++;
+
+			#print "$chr\t$pos\t$ref\t$var\n";
+
+			# check if there are vars (i.e. GT=1) in selected groups
+			$count_var_par1 =0;
+			$count_var_par2 =0;
+			$count_var_hyb =0;
+			$count_var_out =0;
+			$count_var_rest =0;
+
+			$collect_var_rest = '';
+
+			$count_miss_par1 = 0;
+			$count_miss_par2 = 0;
+			$count_miss_hyb = 0;
+			$count_miss_out = 0;
+			$count_miss_rest = 0;
+		
+			# loop over all genotype values, check if test groups have SNPs
+			for($i=9;$i<@data;$i++) {	
+
+				# check if there is a variant
+				$var_yes = 0;
+				$missing = 0;
+				&eval;
+
+				if ($long =~ /v/) {
+					print "$chr\t$pos\t$ref\t$var\t$data[$i]\t$field[$i]\n";
+					}
+
+				$yes_test =0;
+
+				# loop over all isolate names, to test if isolate is in list
+				for($j=0;$j<@iso;$j++) {
+
+					$ct = $iso[$j];
+
+					# if isolate is in list, check for variants
+					if ($field[$i] eq $ct) {
+
+						$yes_test =1;
+
+						#print "test\t$j\t$iso[$j]\t<=>$field[$i]\n";
+
+						push(@keep,$GT);
+						push(@keep_name,$field[$i]);
+			
+						if (($field[$i] =~ /$par1\_/)) {
+                                                        push(@keep_par1,$GT);
+                                                        }
+						if (($field[$i] =~ /$par2\_/)) {
+                                                        push(@keep_par2,$GT);
+                                                        }
+						if (($field[$i] =~ /$out\_/)) {
+                                                        push(@keep_out,$GT);
+                                                        }
+
+						# count parent and hybrid SNPs
+						if (($var_yes ==1) && ($field[$i] =~ /$par1\_/)){
+							$count_var_par1++;
+							}
+                                                if (($var_yes ==1) && ($field[$i] =~ /$par2\_/)){
+                                                        $count_var_par2++;
+                                                        }
+                                                if (($var_yes ==1) && ($field[$i] =~ /$hyb\_/)){
+                                                        $count_var_hyb++;
+                                                        }
+                                                if (($var_yes ==1) && ($field[$i] =~ /$out\_/)){
+                                                        $count_var_out++;
+                                                        }
+
+                                                if (($missing ==1) && ($field[$i] =~ /$par1\_/)) {
+                                                        $count_miss_par1++;
+                                                        }
+
+                                                if (($missing ==1) && ($field[$i] =~ /$par2\_/)) {
+                                                        $count_miss_par2++;
+                                                        }
+
+						if (($missing ==1) && ($field[$i] =~ /$hyb\_/)) {
+                                                        $count_miss_hyb++;
+                                                        }
+
+                                                if (($missing ==1) && ($field[$i] =~ /$out\_/)) {
+                                                        $count_miss_out++;
+                                                        }
+
+						}
+
+					}
+				
+				# count variants in isolates that are not on the list
+				if ($yes_test ==0) {
+					push(@keep_rest,$GT);
+					$collect_var_rest .= "$GT\t$data[$i]\tF=$field[$i]\n";
+                                        }
+
+				if (($yes_test ==0) && ($var_yes ==1)) {
+					$count_var_rest++;
+					}
+
+				if (($yes_test ==0) &&($missing ==1)) {
+					$count_miss_rest++;
+					}
+
+                                # count variants in all non-CHN isolates, to show ancestral private CHN  
+                                if (($yes_test ==0) && ($var_yes ==1) && ($field[$i] !~ /^CHN/)) {
+                                        $count_var_non_par2++;
+					#print "$pos\t$GT\t$count_var_par1\t$count_var_par2\t$count_var_hyb\t$count_var_non_par2\t$field[$i]\n";
+                                        }
+
+
+				}
+
+			# calc info space par1, par2, hyb
+			$info_hyb = $count_hyb-$count_miss_hyb;
+			$info_par1 = $count_par1-$count_miss_par1;
+			$info_par2 = $count_par2-$count_miss_par2;
+			$info_out = $count_out-$count_miss_out;
+			$info_rest = $count_rest-$count_miss_rest;
+
+			$keep = join('',@keep);
+			$keep_rest = join('',@keep_rest);
+			$keep_out  = join('',@keep_out);
+
+			# test for private SNP in reference
+			# variation in all isolates, except reference 
+			$check_REF_priv =0;
+			if (($count_var_par1 == $info_par1-1) && ($count_var_par2 == $info_par2) && ($count_var_hyb == $info_hyb)) {
+				$check_REF_priv =1;
+				}
+
+
+			if ($count_var_rest >=0) {
+				$keep3 = join('',@keep_rest);
+				#print "$chr\t$pos\t$ref\t$var\t$keep3\t$count_var_rest/$info_rest\t$count_var_par1/$info_par1\t$count_var_par2/$info_par2\n";
+				}
+
+			if (($count_var_par1==0) && ($count_var_out > 10)) {
+				$keep = join('',@keep2);
+                                $keep3 = join('',@keep3);
+                                #print "$chr\t$pos\t$ref\t$var\t$keep\t$count_var_out/$info_out\t$keep3\t$count_var_par1/$info_par1\t$count_var_par2\n";
+                                }
+
+
+                        # test for parent 1 lineage specific SNP
+                        # ... and V in all (most) parent 1 and at least 1 hybrids, bur R in all par2
+			if (($count_var_par1 > $info_par1*$min_par1) && ($info_par1 > $min_info) && ($count_var_hyb > 0) && ($info_par2 > $min_info) && ($count_var_par2 ==0) && ($count_var_out ==0))  {
+                                $var_type = 1;
+				print LOG2 "$chr\t$pos\t$ref\t$var\t@keep\n";
+				&mk_hybrid_plot;
+                                }
+
+
+			# test for parent 2 lineage specific SNP (present in user-defined proportion of parent2 and some hybrids)
+			# ... and absent from parent 1
+			if (($count_var_par2 >= $info_par2*$min_par2) && ($info_par2 > $min_info) && ($count_var_hyb > 0) && ($info_par1 > $min_info) && ($count_var_par1 ==0) && ($count_var_out ==0) ) {
+				$var_type = 2;
+				print LOG2 "$chr\t$pos\t$ref\t$var\t@keep\n";
+				&mk_hybrid_plot;
+				}
+
+                        # test for hybrid private SNPs (present in hybrid)
+                        # ... and absent from parent 1 and 2
+			if (($count_var_par1 == 0) && ($info_par1 > $min_info) && ($count_var_par2 == 0) && ($info_par2 > $min_info) && ($count_var_hyb > 0)) {
+				#print "$r\n$collect_var_rest\n";
+                                $var_type = 3;
+                                print LOG2 "$chr\t$pos\t$ref\t$var\t@keep\n";
+
+				# display private SNPs is option is used
+				if ($long =~ /p/) {
+                                	&mk_hybrid_plot;
+					}
+                                }
+
+
+	
+
+                        } # end test 1 bp SNPs
+
+                }
+	$first =0;
+	}
+
+print "1-bp SNPs:    $count_all\n";
+print "select SNPs:  $count_good\n";
+
+print "wrote $log1\n\n";
+
+
+# assign genotypes to putative hybrid ++++++++++++++++++++++++++++++++++++++
+sub mk_hybrid_plot {
+
+# define variant types (1=parent1, 2 =parent2, 3 = private to hybrid, 4 = missing data)
+
+if ($var_type ==1) { $ref_type = 2; }
+if ($var_type ==2) { $ref_type = 1; }
+if ($var_type ==3) { $ref_type = 0; }
+
+
+$string = '';
+
+# loop through hybrid, parent 1 and 2 and rest to add string
+@temp = @hyb;
+&add_string;
+
+@temp = @par1;
+&add_string;
+
+@temp = @par2;
+&add_string;
+
+@temp = @out;
+&add_string;
+
+# add genotypes to collection string
+sub add_string_v0 {
+
+$string .= " ";
+
+for($k=0;$k<@temp;$k++) {
+
+        for($l=0;$l<@keep;$l++) {
+                if ($keep_name[$l] eq $temp[$k]) {
+			$string .= $keep[$l];
+                        }
+                }
+	}
+}
+
+
+
+# add genotypes to collection string, using numerical code
+sub add_string {
+
+$string .= " ";
+
+for($k=0;$k<@temp;$k++) {
+
+        for($l=0;$l<@keep;$l++) {
+                if ($keep_name[$l] eq $temp[$k]) {
+
+                        if ($keep[$l] eq 'V') {
+                                $string .= $var_type;
+                                }
+                        if ($keep[$l] eq '.') {
+                                $string .= $ref_type;
+                                }
+                        if ($keep[$l] eq '-') {
+                                $string .= "4";
+                                }
+                        }
+                }
+	}
+}
+
+
+
+$count_good++;
+
+$l = length($string);
+#print "$count_all\t$count_good\t$chr\t$pos\t$ref\t$var\t$string\tHyb: $count_var_hyb/$info_hyb\tpar1: $count_var_par1/$info_par1\tpar2: $count_var_par2/$info_par2\tT=$var_type\t$keep_rest\t$keep_out\tR=$count_var_rest/$info_rest (m=$count_miss_rest)\tOUT=$count_var_out/$info_out\n";
+
+print "$count_all\t$count_good\t$chr\t$pos\t$ref\t$var\t$string\tHyb: $count_var_hyb/$info_hyb\tpar1: $count_var_par1/$info_par1\tpar2: $count_var_par2/$info_par2\tT=$var_type\n";
+
+
+$string =~ s/\s+//g;
+print LOG1 "$chr\t$pos\t$ref\t$var\t$string\n";
+
+}
+
+
+
+
+
+# +++++++++++++++++++++++++++++++++++++++
+# get quality of the SNPs
+sub eval {
+
+($gt,$dp,$qual) = ($data[$i] =~ /^([^:]+):[^:]+:([^:]+):([^:]+):/);
+
+$GT = ".";
+if ($gt eq '1') {
+	$GT = "V";
+	$var_yes = 1;
+	}
+
+# check for missing data to calc the total number of informative isolates
+if ($data[$i] =~ /^\./) {
+	$GT = "-";
+	$missing = 1;
+	}
+
+#print "SEL=$sel_yes\t$gt\t$dp\t$qual\t$GT\t$data[$i]\t$field[$i]\n";
+
+
+
+
+}
+
+
+	

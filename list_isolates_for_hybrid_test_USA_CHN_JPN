@@ -1,0 +1,36 @@
+# parent1 USA ancestors
+USA_1	USA
+USA_2	USA
+USA_3	USA
+USA_4	USA
+USA_5	USA
+USA_6	USA
+USA_7	USA
+USA_AK3_11	USA
+USA_C3_1_5	USA
+USA_C4_6	USA
+USA_J2_1	USA
+USA_Ken_2_5	USA
+
+
+# parent 2: CHNa China ancestors
+CHN_15_9      CHN
+CHN_17_40      CHN
+CHN_19_11      CHN
+CHN_1_62      CHN
+CHN_21_2      CHN
+CHN_28_9      CHN
+CHN_47_1      CHN
+CHN_5_93      CHN
+CHN_6_69      CHN
+CHN_E21      CHN
+
+
+# putative USA-CHN  hybrids
+JPN_244a	JPN
+JPN_CHIKA	JPN
+JPN_CHI_79a	JPN
+JPN_MEK_13b	JPN
+JPN_MEK_2c	JPN
+
+
