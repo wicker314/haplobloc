@@ -1,0 +1,78 @@
+
+
+################################################
+System requirements
+
+Ubuntu 16.04 or higher
+packages needed for graphical output: libgd-graph-perl, libgd-perl and libgd-text-perl
+which are available from Ubuntu repositories.
+the software was tested on Ubuntu 16.04, 18.04 and 20.04
+
+
+################################################
+Intallation guide
+
+the two programs are stand alone perl scripts. No installation is necessary
+the programs can be run in the working directory or placed in a dedicated software bin (e.g. /usr/bin).
+Typical install time: 10 min
+
+
+################################################
+Instructions to run on data
+
+
+
+STEP 1: assign SNPs to parental populations 
+The software to assign SNPs to parental populations is
+NGS_SNPs_from_vcf_test_recent_hybrids
+
+running the program without arguments shows a list of required arguments. 
+arguments are supplied without identifiers (e.g. -o or -i) or wild cards
+
+the input files are:
+1. cohort vcf (i.e. variant call file containing genotype info for hypothetical parenta and hybrid populations). The demo file is:
+demo_Bgt_maxmiss090_noindels_minDP3maxDP1000_bial_chr09_2MB.recode.vcf
+
+2. list of isolate (individual) names with name of the associated population
+the demo file is list_isolates_for_hybrid_test_USA_CHN_JPN
+
+Parameters are:
+- minimum info space for parents: minimal number of individuals for which SNP data is available for each SNP (i.e. the inverse of missing data)
+
+- minimum frequency in parent 1: number of individuals of parent 1 population that carry the SNP variant divided by the info space
+
+- minimum frequency in parent 2: number of individuals of parent 2 population that carry the SNP variant divided by the info space
+
+the output file has the prefix "hybrid_plot"
+the demo output is hybrid_plot_0.9_0.9__USA_CHN_JPN
+
+Expected run time for demo set: 10 sec
+Expected run time for entire 150 Mb genome: 5-10 min
+
+STEP 2:
+the graphical representation is done with the perl script
+png_hybrid_SNP_plot 
+running the program without arguments shows a list of required arguments.
+arguments are supplied without identifiers (e.g. -o or -i) or wild cards
+
+Input files are:
+1. the hybrid_plot produced in STEP 1.
+
+2. a list with chromosome names and sizes
+the demo file is list_Bgt_96224_chr_size
+
+other arguments are:
+- y distance between isolates in pixels: determines the size of the lines by which the SNPs are displayed
+- query for hybrid population to display: string that occurs in all individual names that should be displayed. no argument displays all populations.
+
+Expected output: png image (demo set: SNP_plot_hybrid_plot_0.9_0.9__USA_CHN_JPN.png)
+Not that the demo set only contains data for the first 2 Mb of chromosome 9.
+Expected run time for demo set: 5 sec
+Expected run time for entire 150 Mb genome: 50 sec
+
+ 
+
+
+
+
+
